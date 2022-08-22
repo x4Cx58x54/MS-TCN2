@@ -1,11 +1,13 @@
-#!/usr/bin/python2.7
-
-import torch
-import numpy as np
+import os
 import random
 
+import numpy as np
+import torch
 
-class BatchGenerator(object):
+from utils import read_nonempty_lines
+
+
+class BatchGenerator:
     def __init__(self, num_classes, actions_dict, gt_path, features_path, sample_rate):
         self.list_of_examples = list()
         self.index = 0
@@ -25,9 +27,7 @@ class BatchGenerator(object):
         return False
 
     def read_data(self, vid_list_file):
-        file_ptr = open(vid_list_file, 'r')
-        self.list_of_examples = file_ptr.read().split('\n')[:-1]
-        file_ptr.close()
+        self.list_of_examples = read_nonempty_lines(vid_list_file)
         random.shuffle(self.list_of_examples)
 
     def next_batch(self, batch_size):
@@ -37,12 +37,13 @@ class BatchGenerator(object):
         batch_input = []
         batch_target = []
         for vid in batch:
-            features = np.load(self.features_path + vid.split('.')[0] + '.npy')
-            file_ptr = open(self.gt_path + vid, 'r')
-            content = file_ptr.read().split('\n')[:-1]
-            classes = np.zeros(min(np.shape(features)[1], len(content)))
+            feature_file_path = os.path.join(self.features_path, os.path.splitext(vid)[0]+'.npy')
+            features = np.load(feature_file_path)
+            gt_file_path = os.path.join(self.gt_path, vid)
+            gt_content = read_nonempty_lines(gt_file_path)
+            classes = np.zeros(min(np.shape(features)[1], len(gt_content)))
             for i in range(len(classes)):
-                classes[i] = self.actions_dict[content[i]]
+                classes[i] = self.actions_dict[gt_content[i]]
             batch_input .append(features[:, ::self.sample_rate])
             batch_target.append(classes[::self.sample_rate])
 

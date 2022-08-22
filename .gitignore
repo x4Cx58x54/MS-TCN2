@@ -1,0 +1,13 @@
+.vscode/
+
+__pycache__/
+*.pyc
+
+data/
+logs/
+models/
+results/
+
+TODO.md
+
+*.sh

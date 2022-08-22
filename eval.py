@@ -1,16 +1,12 @@
-#!/usr/bin/python2.7
 # adapted from: https://github.com/colincsl/TemporalConvolutionalNetworks/blob/master/code/metrics.py
 
-import numpy as np
+import os
 import argparse
 
+import numpy as np
 
-def read_file(path):
-    with open(path, 'r') as f:
-        content = f.read()
-        f.close()
-    return content
-
+from configs import configs
+from utils import read_nonempty_lines
 
 def get_labels_start_end_time(frame_wise_labels, bg_class=["background"]):
     labels = []
@@ -36,7 +32,7 @@ def get_labels_start_end_time(frame_wise_labels, bg_class=["background"]):
 def levenstein(p, y, norm=False):
     m_row = len(p)
     n_col = len(y)
-    D = np.zeros([m_row+1, n_col+1], np.float)
+    D = np.zeros([m_row+1, n_col+1], float)
     for i in range(m_row+1):
         D[i, 0] = i
     for i in range(n_col+1):
@@ -93,30 +89,33 @@ def f_score(recognized, ground_truth, overlap, bg_class=["background"]):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--dataset', default="gtea")
-    parser.add_argument('--split', default='1')
+    parser.add_argument('--config_name', type=str)
 
     args = parser.parse_args()
+    config = configs[args.config_name]
 
-    ground_truth_path = "./data/"+args.dataset+"/groundTruth/"
-    recog_path = "./results/"+args.dataset+"/split_"+args.split+"/"
-    file_list = "./data/"+args.dataset+"/splits/test.split"+args.split+".bundle"
+    dataset_path = os.path.join('data', config.dataset)
+    gt_path = os.path.join(dataset_path, config.gt_dir)
 
-    list_of_videos = read_file(file_list).split('\n')[:-1]
+    recog_path = os.path.join('results', config.dataset, f'split_{config.split}')
+    splits_path = os.path.join(dataset_path, config.splits_dir)
+    file_list = os.path.join(splits_path, f'test.split{config.split}.bundle')
+
+    list_of_videos = read_nonempty_lines(file_list)
 
     overlap = [.1, .25, .5]
-    tp, fp, fn = np.zeros(3), np.zeros(3), np.zeros(3)
+    tp, fp, fn = np.zeros(len(overlap)), np.zeros(len(overlap)), np.zeros(len(overlap))
 
     correct = 0
     total = 0
     edit = 0
 
     for vid in list_of_videos:
-        gt_file = ground_truth_path + vid
-        gt_content = read_file(gt_file).split('\n')[0:-1]
+        gt_content = read_nonempty_lines(os.path.join(gt_path, vid))
 
-        recog_file = recog_path + vid.split('.')[0]
-        recog_content = read_file(recog_file).split('\n')[1].split()
+        recog_content = read_nonempty_lines(os.path.join(recog_path, os.path.splitext(vid)[0]))
+
+        assert len(gt_content) == len(recog_content)
 
         for i in range(len(gt_content)):
             total += 1
@@ -131,18 +130,17 @@ def main():
             fp[s] += fp1
             fn[s] += fn1
 
-    print("Acc: %.4f" % (100*float(correct)/total))
-    print('Edit: %.4f' % ((1.0*edit)/len(list_of_videos)))
     acc = (100*float(correct)/total)
     edit = ((1.0*edit)/len(list_of_videos))
+    print(f'Acc: {acc:.4f}')
+    print(f'Edit: {edit:.4f}')
     for s in range(len(overlap)):
         precision = tp[s] / float(tp[s]+fp[s])
         recall = tp[s] / float(tp[s]+fn[s])
 
         f1 = 2.0 * (precision*recall) / (precision+recall)
-
         f1 = np.nan_to_num(f1)*100
-        print('F1@%0.2f: %.4f' % (overlap[s], f1))
+        print(f'F1@{overlap[s]:0.2f}: {f1:.4f}')
 
 if __name__ == '__main__':
     main()
