@@ -5,14 +5,17 @@ from typing import Literal
 import numpy as np
 from tqdm import tqdm
 
-
-target_path = 'data/ktd_1fps_3072'
+out_dim = 3072
+merge_mode = 'concat'
+fps = 5
+info = '_from25'
+target_path = f'data/ktd_{fps}fps_{out_dim}{info}'
 
 dataset_path = 'path_to_dataset'
-videomae_feature_path = os.path.join(dataset_path, 'features_videomae_320x320_1fps')
+videomae_feature_path = os.path.join(dataset_path, 'features_videomae_25fps')
 assert os.path.isdir(videomae_feature_path), videomae_feature_path
 
-target_feature_path = os.path.join(target_path, 'features_videomae_320x320_1fps')
+target_feature_path = os.path.join(target_path, 'features_videomae_25fps')
 target_gt_path = os.path.join(target_path, 'groundTruth')
 target_splits_path = os.path.join(target_path, 'splits')
 
@@ -45,8 +48,8 @@ def merge_multiview_features(
         feat_t = pickle.load(f)
     assert feat_f.shape[1] == feat_s.shape[1] == feat_t.shape[1]
     dim_input = feat_f.shape[1]
-    effective_frame_num = min([feat_f.shape[0], feat_s.shape[0], feat_t.shape[0]])
-    slice_and_T = lambda x: x.detach().cpu().numpy()[:effective_frame_num, :].T
+    effective_time = min([feat_f.shape[0], feat_s.shape[0], feat_t.shape[0]])
+    slice_and_T = lambda x: x.detach().cpu().numpy()[:effective_time, :].T
     feat_f = slice_and_T(feat_f)
     feat_s = slice_and_T(feat_s)
     feat_t = slice_and_T(feat_t)
@@ -55,7 +58,7 @@ def merge_multiview_features(
         assert dim_output == res.shape[0], 'Set dim_output manually is still required.'
     elif mode == 'avg':
         res = (feat_f + feat_s + feat_t) / 3
-    assert res.shape == (dim_output, effective_frame_num)
+    assert res.shape == (dim_output, effective_time)
     return res
 
 gt_sample_name_list = []
@@ -78,27 +81,27 @@ for vid_anno in tqdm(annotations['annotations']):
     res_gt_path = os.path.join(target_gt_path, sample_name + '.txt')
     res_feature_path = os.path.join(target_feature_path, sample_name + '.npy')
 
-    merged_feat = merge_multiview_features(3072, 'concat', feat_f_path, feat_s_path, feat_t_path)
-    # merged_feat = merge_multiview_features(1024, 'avg', feat_f_path, feat_s_path, feat_t_path)
+    merged_feat = merge_multiview_features(out_dim, merge_mode, feat_f_path, feat_s_path, feat_t_path)
     np.save(res_feature_path, merged_feat)
-    dim_output, effective_frame_num = merged_feat.shape
+    dim_output, effective_time = merged_feat.shape
 
-    # for frame_id in range(effective_frame_num):
-    gt_list = [0] * effective_frame_num
+    # for frame_id in range(effective_time):
+    empty_action = -1
+    gt_list = [empty_action] * effective_time
     for action in vid_anno['annotation_for_video']:
         # action_type start_sec end_sec score
         action_type = action['action_type']
         start_sec = action['start_sec']
         end_sec = action['end_sec']
         score = action['score']
-        for i in range(start_sec, end_sec+1):
-            if i < effective_frame_num:
+        for i in range(start_sec*fps, end_sec*fps+1): # end_sec is still performing the action
+            if i < effective_time:
                 gt_list[i] = action_dict[action_type]
-    for i in range(effective_frame_num):
-        if gt_list[i] == 0:
+    for i in range(len(gt_list)):
+        if gt_list[i] == empty_action:
             gt_list[i] = 'background'
     with open(res_gt_path, 'w') as f:
-        for i in range(effective_frame_num):
+        for i in range(len(gt_list)):
             f.write(gt_list[i] + '\n')
 print('Processing video features done.')
 

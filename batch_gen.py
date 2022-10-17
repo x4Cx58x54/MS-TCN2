@@ -4,18 +4,20 @@ import random
 import numpy as np
 import torch
 
+from configs import MSTCN2_Config
 from utils import read_nonempty_lines
 
 
 class BatchGenerator:
-    def __init__(self, num_classes, actions_dict, gt_path, features_path, sample_rate):
-        self.list_of_examples = list()
+    def __init__(self, config: MSTCN2_Config, vid_list_file):
+        self.list_of_examples = read_nonempty_lines(vid_list_file)
+        # random.shuffle(self.list_of_examples)
         self.index = 0
-        self.num_classes = num_classes
-        self.actions_dict = actions_dict
-        self.gt_path = gt_path
-        self.features_path = features_path
-        self.sample_rate = sample_rate
+        self.actions_dict = config.actions_dict
+        self.num_classes = len(self.actions_dict)
+        self.gt_path = config.gt_path
+        self.features_path = config.features_path
+        self.sample_rate = config.sample_rate
 
     def reset(self):
         self.index = 0
@@ -25,10 +27,6 @@ class BatchGenerator:
         if self.index < len(self.list_of_examples):
             return True
         return False
-
-    def read_data(self, vid_list_file):
-        self.list_of_examples = read_nonempty_lines(vid_list_file)
-        random.shuffle(self.list_of_examples)
 
     def next_batch(self, batch_size):
         batch = self.list_of_examples[self.index:self.index + batch_size]

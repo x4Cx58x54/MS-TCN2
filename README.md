@@ -23,6 +23,8 @@ Install required packages:
 loguru
 tensorboard
 tqdm
+scikit-learn
+matplotlib
 ```
 
 ## Prepare Data

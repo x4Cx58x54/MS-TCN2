@@ -4,6 +4,8 @@ import os
 import argparse
 
 import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 from configs import configs
 from utils import read_nonempty_lines
@@ -86,34 +88,49 @@ def f_score(recognized, ground_truth, overlap, bg_class=["background"]):
     return float(tp), float(fp), float(fn)
 
 
-def main():
-    parser = argparse.ArgumentParser()
+def main(config, overlap=[.1, .25, .5, .75, .9]):
 
-    parser.add_argument('--config_name', type=str)
+    gt_path = config.gt_path
+    recog_path = config.results_dir
 
-    args = parser.parse_args()
-    config = configs[args.config_name]
+    file_list = config.vid_test_list_file
 
-    dataset_path = os.path.join('data', config.dataset)
-    gt_path = os.path.join(dataset_path, config.gt_dir)
+    mapping_file = config.mapping_file
 
-    recog_path = os.path.join('results', config.dataset, f'split_{config.split}')
-    splits_path = os.path.join(dataset_path, config.splits_dir)
-    file_list = os.path.join(splits_path, f'test.split{config.split}.bundle')
+    actions = read_nonempty_lines(mapping_file)
+    action_ids = []
+    action_names = []
+    for a in actions:
+        action_ids.append(a.split(' ')[0])
+        action_names.append(a.split(' ')[1])
 
     list_of_videos = read_nonempty_lines(file_list)
 
-    overlap = [.1, .25, .5]
     tp, fp, fn = np.zeros(len(overlap)), np.zeros(len(overlap)), np.zeros(len(overlap))
 
     correct = 0
     total = 0
     edit = 0
 
+    gt_content_total = []
+    recog_content_total = []
+
     for vid in list_of_videos:
         gt_content = read_nonempty_lines(os.path.join(gt_path, vid))
-
         recog_content = read_nonempty_lines(os.path.join(recog_path, os.path.splitext(vid)[0]))
+
+        if abs(len(gt_content)-len(recog_content)) > 3:
+            print('WARNING: inconsistent gt and pred lengths')
+
+        # ml = min(len(recog_content), len(gt_content))
+        # gt_content = gt_content[:ml]
+        # recog_content = recog_content[:ml]
+
+        gt_content = gt_content[:len(recog_content)]
+
+
+        gt_content_total.extend(gt_content)
+        recog_content_total.extend(recog_content)
 
         assert len(gt_content) == len(recog_content)
 
@@ -130,17 +147,58 @@ def main():
             fp[s] += fp1
             fn[s] += fn1
 
+    # confusion matrix
+    cm = confusion_matrix(gt_content_total, recog_content_total, labels=action_names)
+    cm_col_normalized = cm.astype('float') #/ cm.sum(axis=1)
+
+    # standard
+    cm_disp = ConfusionMatrixDisplay(cm_col_normalized)
+    # plt.rcParams["figure.figsize"] = (20, 20)
+    plt.rcParams["figure.figsize"] = (40, 40)
+    cm_disp.plot(colorbar=False)
+    # cm_disp.plot(values_format='.2f', cmap=plt.cm.viridis)
+
+    # fig, ax = plt.subplots(figsize=(15, 15))
+    # ax.matshow(cm_col_normalized, cmap=plt.cm.viridis, alpha=0.5)
+    # for m in range(cm_col_normalized.shape[0]):
+    #     for n in range(cm_col_normalized.shape[1]):
+    #         ax.text(x=m,y=n,s=f'{cm_col_normalized[m, n]:.2f}'[1:], va='center', ha='center')
+
+    # ax.set_xlabel('Predictions')
+    # ax.set_ylabel('Truths')
+    # ax.set_title('Confusion Matrix, normorlized as recalls')
+    cm_save_path = os.path.join(recog_path, 'cm.png')
+    plt.savefig(cm_save_path, bbox_inches='tight')
+
+    metrics = dict()
+
     acc = (100*float(correct)/total)
     edit = ((1.0*edit)/len(list_of_videos))
-    print(f'Acc: {acc:.4f}')
-    print(f'Edit: {edit:.4f}')
+    metrics['Accuracy% / Test'] = acc
+    metrics['Edit / Test'] = edit
     for s in range(len(overlap)):
-        precision = tp[s] / float(tp[s]+fp[s])
-        recall = tp[s] / float(tp[s]+fn[s])
+        # avoid zero division
+        precision, recall = 0, 0
+        if float(tp[s]+fp[s]) > 1e-4 and float(tp[s]+fn[s]) > 1e-4:
+            precision = tp[s] / float(tp[s]+fp[s])
+            recall = tp[s] / float(tp[s]+fn[s])
+        if (precision+recall) > 1e-4:
+            f1 = 2.0 * (precision*recall) / (precision+recall)
+            f1 = np.nan_to_num(f1)*100
+            metrics[f'F1% / @{overlap[s]:0.2f}, Test'] = f1
+            metrics[f'Precision% / @{overlap[s]:0.2f}, Test'] = precision * 100
+            metrics[f'Recall% / @{overlap[s]:0.2f}, Test'] = recall * 100
+    for k, v in sorted(metrics.items()):
+        print(f'{k:<25}: {v:.4f}')
 
-        f1 = 2.0 * (precision*recall) / (precision+recall)
-        f1 = np.nan_to_num(f1)*100
-        print(f'F1@{overlap[s]:0.2f}: {f1:.4f}')
+    return cm_save_path, metrics
 
 if __name__ == '__main__':
-    main()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config_name', type=str)
+    args = parser.parse_args()
+
+    config = configs[args.config_name]
+
+    main(config)

@@ -7,6 +7,7 @@ data/
 logs/
 models/
 results/
+visualizations/
 
 TODO.md
 
