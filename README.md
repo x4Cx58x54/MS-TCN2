@@ -25,6 +25,7 @@ tensorboard
 tqdm
 scikit-learn
 matplotlib
+distinctipy
 ```
 
 ## Prepare Data

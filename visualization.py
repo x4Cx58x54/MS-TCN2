@@ -2,6 +2,7 @@ import os
 import random
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from distinctipy import get_colors
 
 from configs import configs
 from utils import read_nonempty_lines
@@ -42,9 +43,12 @@ def main(config, video_name, title_suffix='', fps=5, target_dir='visualizations'
     gt_period_wise = list_to_period(gt, target_gt_file)
     pred_period_wise = list_to_period(pred, target_pred_file)
 
-    random.seed(0)
-    colors = [f'#{random.randint(0, 0xFFFFFF):06X}' for _ in range(len(actions_dict))]
-    colors[-1] = '#FFFFFF'
+    colors = get_colors(n_colors=len(actions_dict), rng=1)
+    colors[-1] = (1.0, 1.0, 1.0)
+
+    # random.seed(0)
+    # colors = [f'#{random.randint(0, 0xFFFFFF):06X}' for _ in range(len(actions_dict))]
+    # colors[-1] = '#FFFFFF'
 
     height = 1
     fig, ax = plt.subplots(figsize=(20,3))
@@ -71,7 +75,7 @@ def main(config, video_name, title_suffix='', fps=5, target_dir='visualizations'
 
 if __name__ == '__main__':
 
-    config_name = 'ktd_5fps_3072'
+    config_name = 'ktd_5fps_3072_from25_fmap64'
     config = configs[config_name]
 
     video_name = '048_0'
